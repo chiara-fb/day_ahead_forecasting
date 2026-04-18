@@ -1,0 +1,10 @@
+TreeModel:
+  boosting_type: 'gbdt'
+  num_leaves: 31
+  max_depth: -1
+  learning_rate: 0.1
+  n_estimators: 100
+  random_state: 42
+  pred_length: 24 # predict day-ahead jointly
+  train_length: 
+  lags: [24, 48, 72, 96]
