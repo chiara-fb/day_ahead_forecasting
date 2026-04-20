@@ -65,7 +65,7 @@ class TreeModel:
         return predictions
 
 
-    def rolling_forecast(self, X, y) -> Tuple[np.ndarray, np.ndarray]:
+    def rolling_forecast(self, X, y) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
         Fits the model on pred_length observations and
         predict the next train_length observations.
@@ -76,6 +76,8 @@ class TreeModel:
 
         y_pred = []
         y_true = []
+        feature_importance = []
+
         for start in tqdm(range(0, len(X), self.pred_length)):
             end = start + self.train_length
             test_end = end + self.pred_length
@@ -91,7 +93,12 @@ class TreeModel:
             y_pred.append(predictions)
             y_true.append(y_test)
 
-        return np.concatenate(y_true).reshape(-1, 1), np.vstack(y_pred)
+            med_q = self.quantiles[len(self.quantiles) // 2]
+            model = self.models.get(0.5, self.models[med_q])
+            feature_importance.append(model.feature_importances_)
+            
+        return np.concatenate(y_true).reshape(-1, 1), np.vstack(y_pred), np.vstack(feature_importance)
+
     
 
 if __name__ == "__main__":
@@ -99,32 +106,44 @@ if __name__ == "__main__":
     import os
     import sys
     sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    from utils.process_data import make_dataset
+    from process_data import make_dataset
     # Example usage:
     with open("config.yaml") as f:
         config = yaml.safe_load(f)
-    
-    data = pd.read_csv("input/processed/data.csv", index_col=0, parse_dates=True)
 
-    model = TreeModel(config['TreeModel'], quantiles=config["quantiles"])
-    X, y = make_dataset(data, config['TreeModel'])
-    y_true, y_pred = model.rolling_forecast(X, y)
+    tree_config = config["TreeModel"]
+    data = pd.read_csv("input/processed/data.csv", index_col=0, parse_dates=True)
+    col_names = np.array(tree_config["features"] + [f"lag_{i}" for i in tree_config["lags"]])
+
+    model = TreeModel(tree_config, quantiles=config["quantiles"])
+    X, y = make_dataset(data, tree_config)
+    y_true, y_pred, feat_importances = model.rolling_forecast(X, y)
     import matplotlib.pyplot as plt
     
     x_axis = np.arange(len(y_true))
-    fig, ax = plt.subplots(figsize=(12, 6), tight_layout=True)
+    fig0, ax0 = plt.subplots(figsize=(12, 6), tight_layout=True)
 
-    ax.plot(x_axis, y_true, lw=2, label="True val")
-    ax.fill_between(x_axis, y_pred[:, 0], y_pred[:, -1], color="tab:blue", alpha=0.2, label="Prob. range")
-    ax.plot(x_axis, y_pred, color="tab:blue", ls="--")
-    fig.savefig("figures/tree_based_rolling_forecast.png")
+    ax0.plot(x_axis, y_true, lw=2, label="True val")
+    ax0.fill_between(x_axis, y_pred[:, 0], y_pred[:, -1], color="tab:blue", alpha=0.2, label="Prob. range")
+    ax0.plot(x_axis, y_pred, color="tab:blue", ls="--")
+    fig0.savefig("figures/tree_based_rolling_forecast.png")
 
     pred_data = np.hstack([y_true, y_pred])
     pred_cols = ['true'] + [f'pred_q{q}' for q in model.quantiles]
     preds = pd.DataFrame(pred_data, columns=pred_cols)
     # Note: Reconstructing the exact datetime index for rolling validation is complex
     # and depends on train/pred lengths. For simplicity, we save it with a range index.
-    os.makedirs("output/tree_based", exist_ok=True)
+    
     curr_time = datetime.now().strftime("%Y%m%d%H%M%S")
-    preds.to_csv(f"output/tree_based/{curr_time}_predictions.csv")
-    yaml.safe_dump(config, open(f"output/tree_based/{curr_time}_config.yaml", "w"))
+    os.makedirs(f"output/tree_based/{curr_time}", exist_ok=True)
+    preds.to_csv(f"output/tree_based/{curr_time}/predictions.csv")
+    feat_importances = pd.DataFrame(feat_importances, columns=col_names)
+    feat_importances.to_csv(f"output/tree_based/{curr_time}/feature_importances.csv")
+
+    fig1, ax1 = plt.subplots(figsize=(12, 6), tight_layout=True)
+    feat_importances.plot(kind="box", ax=ax1)
+    ax1.set_title("Predictive feature importances")
+    fig1.savefig("figures/tree_based_feature_importances.png")
+
+
+    yaml.safe_dump(config, open(f"output/tree_based/{curr_time}/config.yaml", "w"))

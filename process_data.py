@@ -18,7 +18,7 @@ def add_engineer_features(df: pd.DataFrame, target_col: str = 'Price') -> pd.Dat
     data[daily_freq_cols] = data[daily_freq_cols].ffill()
     data = data.dropna(axis=1)
     
-    # 1. Calendar Features (Capturing seasonality and demand patterns)
+    # Calendar Features (Capturing seasonality and demand patterns)
     data['weekday'] = data.index.dayofweek
     data['hour'] = data.index.hour
     data['month'] = data.index.month
