@@ -12,7 +12,8 @@ Repository to forecast day-ahead prices with different probabilistic methods
 │   └── losses.py               # Includes pinball and other losses
 │
 ├── models/
-│   ├── BaselineModel.py        # QuantileRegression model
+│   ├── ChronosModel.py         # Transformer-based trained on avg pinball loss
+│   └── LinearModel.py          # Quantile Regression model 
 │   └── TreeModel.py            # Gradient boosted quantile regression trees 
 │
 ├── process_data.py             # adds time features (holiday, one-hot, pos encodings), lags, and forward fills daily values

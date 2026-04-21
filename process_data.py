@@ -7,7 +7,7 @@ from typing import Tuple
 
 
 
-def add_engineer_features(df: pd.DataFrame, target_col: str = 'Price') -> pd.DataFrame:
+def add_engineered_features(df: pd.DataFrame, target_col: str = 'Price') -> pd.DataFrame:
     """
     Creates time-based and autoregressive features required for day-ahead forecasting.
     """
@@ -71,6 +71,6 @@ if __name__ == "__main__":
     filepath = r"input/raw/4ApplicationDSEE_prices_DE_utc.csv"
     os.makedirs("input/processed", exist_ok=True)
     raw_data = pd.read_csv(filepath, index_col=0, parse_dates=True)
-    data = add_engineer_features(raw_data)
+    data = add_engineered_features(raw_data)
     data.to_csv("input/processed/data.csv")
     

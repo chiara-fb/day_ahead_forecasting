@@ -6,3 +6,5 @@ holidays>=0.40.0
 lightgbm>=4.6.0
 pyyaml>=6.0.3
 scikit-learn>=1.8.0
+chronos-forecasting>=2.2.2
+# ngboost>=0.5.10

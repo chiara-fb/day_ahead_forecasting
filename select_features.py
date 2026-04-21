@@ -17,7 +17,7 @@ class FeatureSelector:
             )
     
     
-    def rfe_with_correlation(self, X, y, corr_threshold:float, verbose:bool=True) -> Tuple[np.ndarray, float]:
+    def rfe_with_correlation(self, X, y, corr_threshold:float, verbose:bool=True) -> Tuple[float, np.ndarray]:
         y0_true, y0_pred, feat_importances = self.model.rolling_forecast(X, y)
         best_err = pinball_loss(y0_true, y0_pred, 0.5)
         mean_feat_importances = np.mean(feat_importances, axis=0)
@@ -28,7 +28,9 @@ class FeatureSelector:
         if verbose:
             print("Sorted features: ", best_features)
 
+        # correlation of features sorted by increasing predictive powers
         corr = np.corrcoef(X[:, sorted_features], rowvar=False)
+        
         try:
             distance = 1 - np.abs(corr)
             np.fill_diagonal(distance, 0)
@@ -38,20 +40,40 @@ class FeatureSelector:
             print("Correlation matrix is not symmetric. Correlation-based elimination deactivated.")
             clusters = np.arange(N)
 
+        # indices of feature to keep 
         keep_features = np.ones_like(sorted_features, dtype=bool)
+        unique_vals, counts = np.unique(clusters, return_counts=True)
+        inc_counts = np.argsort(counts)
+        unique_vals = unique_vals[inc_counts]
+
+        # try removing correlated group of features increasingly by number of features
+        for val, count in zip(unique_vals, counts[inc_counts]):
+            if count < 2:
+                continue
+            
+            # test keeping only the feature with the highest explanative power
+            feat_cluster = sorted_features[(clusters == val) & (keep_features)]
+            other_features = sorted_features[(clusters != val) & (keep_features)]
+            test_feat = np.append(other_features, feat_cluster[-1]) 
+            drop = [sorted_features.tolist().index(l) for l in feat_cluster[:-1]]
+            
+            if err < best_err:
+                best_err = err
+                keep_features[drop] = False
+                best_features = self.column_names[sorted_features[keep_features]]
+                if verbose:
+                    print(f"New best error {best_err:.4f} with features: {best_features}")
         
+        # Then recursively try to remove the other features sorted by explanative power
+
         for i in tqdm(range(N)):
-            feat_cluster = sorted_features[(clusters == clusters[i]) & (keep_features)]
-            other_features = sorted_features[(clusters != clusters[i]) & (keep_features)]
-            
-            if len(feat_cluster) > 1:
-                # keep only the feature of the cluster with the highest feat importance 
-                test_feat = np.append(other_features, feat_cluster[-1]) 
-                drop = [sorted_features.tolist().index(l) for l in feat_cluster[:-1]]
-            else:
-                test_feat = other_features
-                drop = i
-            
+            test_feat = sorted_features[(np.arange(N) != i) & (keep_features)]
+            drop = i
+
+            # skips if the feature has already been eliminated
+            if not keep_features[i]:
+                continue
+
             y_true, y_pred, _ = self.model.rolling_forecast(X[:,test_feat], y)
             err = pinball_loss(y_true, y_pred, 0.5)
             
@@ -62,7 +84,7 @@ class FeatureSelector:
                 if verbose:
                     print(f"New best error {best_err:.4f} with features: {best_features}")
         
-        return best_features, best_err
+        return best_err, best_features
             
 
 if __name__ == "__main__":
