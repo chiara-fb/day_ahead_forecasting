@@ -25,7 +25,7 @@ class TreeModel:
 
 
 
-    def train(self, X_train: np.ndarray, y_train: np.ndarray):
+    def train(self, X_train: pd.DataFrame, y_train: pd.Series):
         """
         Trains a separate LightGBM model for each defined quantile.
         Dimension of X_train: (n_samples, n_features)
@@ -45,22 +45,27 @@ class TreeModel:
             model.fit(X_train, y_train)
             self.models[alpha] = model
 
-    def predict(self, X_test: np.ndarray) -> np.ndarray:
+    def predict(self, X_test: pd.DataFrame) -> pd.DataFrame:
         """
         Generates predictions for all trained quantiles.
 
         Returns: 
-            predictions (np.ndarray): (len(X_test), len(quantiles))
+            predictions (pd.DataFrame): (len(X_test), len(quantiles))
         """
         # Ensure models have been trained
         if not self.models:
             raise RuntimeError("Models have not been trained yet. Please call .train() first.")
 
         predictions = np.zeros((X_test.shape[0], len(self.quantiles)))
+        pred_cols = [f'pred_q{q}' for q in self.quantiles]
         
         for i, alpha in enumerate(self.quantiles):
             model = self.models[alpha]
             predictions[:, i] = model.predict(X_test)
+            
+        predictions = pd.DataFrame(predictions, 
+                                   index=X_test.index, 
+                                   columns=pred_cols)
         
         return predictions
 
@@ -76,7 +81,7 @@ class TreeModel:
 
         y_pred = []
         y_true = []
-        feature_importance = []
+        feat_imp = []
 
         for start in tqdm(range(0, len(X), self.pred_length)):
             end = start + self.train_length
@@ -95,9 +100,17 @@ class TreeModel:
 
             med_q = self.quantiles[len(self.quantiles) // 2]
             model = self.models.get(0.5, self.models[med_q])
-            feature_importance.append(model.feature_importances_)
+            feat_imp.append(model.feature_importances_)
             
-        return np.concatenate(y_true).reshape(-1, 1), np.vstack(y_pred), np.vstack(feature_importance)
+        y_true = pd.concat(y_true).rename("true")
+        y_pred = pd.concat(y_pred)   
+        feat_importances = pd.DataFrame(np.vstack(feat_imp))
+        feat_importances.columns = X.columns
+        
+        preds = y_true.to_frame().join(y_pred)
+
+        return preds, feat_importances
+       
 
     
 
@@ -117,33 +130,29 @@ if __name__ == "__main__":
 
     model = TreeModel(tree_config, quantiles=config["quantiles"])
     X, y = make_dataset(data, tree_config)
-    y_true, y_pred, feat_importances = model.rolling_forecast(X, y)
+    preds, feat_importances = model.rolling_forecast(X, y)
+
+    curr_time = datetime.now().strftime("%Y%m%d%H%M%S")
+    output_dir = f"output/tree_based/{curr_time}"
+    os.makedirs(output_dir, exist_ok=True)
+    preds.to_csv(f"{output_dir}/predictions.csv")
+    feat_importances.to_csv(f"{output_dir}/feature_importances.csv")
+    yaml.safe_dump(config, open(f"{output_dir}/config.yaml", "w"))
+
     import matplotlib.pyplot as plt
     
-    x_axis = np.arange(len(y_true))
+    x_axis = preds.index # np.arange(len(preds))
     fig0, ax0 = plt.subplots(figsize=(12, 6), tight_layout=True)
-
-    ax0.plot(x_axis, y_true, lw=2, label="True val")
-    ax0.fill_between(x_axis, y_pred[:, 0], y_pred[:, -1], color="tab:blue", alpha=0.2, label="Prob. range")
-    ax0.plot(x_axis, y_pred, color="tab:blue", ls="--")
-    fig0.savefig("figures/tree_based_rolling_forecast.png")
-
-    pred_data = np.hstack([y_true, y_pred])
-    pred_cols = ['true'] + [f'pred_q{q}' for q in model.quantiles]
-    preds = pd.DataFrame(pred_data, columns=pred_cols)
-    # Note: Reconstructing the exact datetime index for rolling validation is complex
-    # and depends on train/pred lengths. For simplicity, we save it with a range index.
     
-    curr_time = datetime.now().strftime("%Y%m%d%H%M%S")
-    os.makedirs(f"output/tree_based/{curr_time}", exist_ok=True)
-    preds.to_csv(f"output/tree_based/{curr_time}/predictions.csv")
-    feat_importances = pd.DataFrame(feat_importances, columns=col_names)
-    feat_importances.to_csv(f"output/tree_based/{curr_time}/feature_importances.csv")
+    ax0.fill_between(x_axis, preds.iloc[:, 1].values, preds.iloc[:, -1].values, color="tab:blue", alpha=0.2, label="Prob. range")
+    ax0.plot(x_axis, preds.iloc[:, 1:].values, color="tab:blue", ls="--")
+    ax0.plot(x_axis, preds['true'].values, lw=2, label="True val")
+    fig0.savefig("figures/tree_based_rolling_forecast.png")
+    
+
 
     fig1, ax1 = plt.subplots(figsize=(12, 6), tight_layout=True)
     feat_importances.plot(kind="box", ax=ax1)
     ax1.set_title("Predictive feature importances")
     fig1.savefig("figures/tree_based_feature_importances.png")
-
-
-    yaml.safe_dump(config, open(f"output/tree_based/{curr_time}/config.yaml", "w"))
+    

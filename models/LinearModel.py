@@ -121,14 +121,15 @@ if __name__ == "__main__":
     ax.plot(x_axis, y_true, lw=2, label="True val")
     ax.fill_between(x_axis, y_pred[:, 0], y_pred[:, -1], color="tab:blue", alpha=0.2, label="Prob. range")
     ax.plot(x_axis, y_pred, color="tab:blue", ls="--")
-    fig.savefig("figures/baseline_rolling_forecast.png")
+    fig.savefig("figures/linear_rolling_forecast.png")
 
     pred_data = np.hstack([y_true, y_pred])
     pred_cols = ['true'] + [f'pred_q{q}' for q in model.quantiles]
     preds = pd.DataFrame(pred_data, columns=pred_cols)
     # Note: Reconstructing the exact datetime index for rolling validation is complex
     # and depends on train/pred lengths. For simplicity, we save it with a range index.
-    os.makedirs("output/baseline", exist_ok=True)
     curr_time = datetime.now().strftime("%Y%m%d%H%M%S")
-    preds.to_csv(f"output/baseline/{curr_time}_predictions.csv")
-    yaml.safe_dump(config, open(f"output/baseline/{curr_time}_config.yaml", "w"))
+    output_dir = f"output/linear/{curr_time}"
+    os.makedirs(output_dir, exist_ok=True)
+    preds.to_csv(f"{output_dir}/predictions.csv")
+    yaml.safe_dump(config["LinearModel"], open(f"{output_dir}/config.yaml", "w"))

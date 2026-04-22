@@ -29,8 +29,8 @@ class ChronosModel:
         self.quantiles = quantiles
         
         # Chronos-specific configuration
-        self.model_name = config.get("model_name", "amazon/chronos-2")
-        self.num_samples = config.get("num_samples", 20)
+        self.model_name = config["kwargs"].get("model_name", "amazon/chronos-2")
+        self.num_samples = config["kwargs"].get("num_samples", 20)
         
         print(f"Loading Chronos model: {self.model_name}")
         self.pipeline = Chronos2Pipeline.from_pretrained(
@@ -41,7 +41,7 @@ class ChronosModel:
         self.context = None
 
 
-    def rolling_forecast(self, data) -> pd.DataFrame:
+    def rolling_forecast(self, data:pd.DataFrame) -> pd.DataFrame:
         """
         Performs rolling window forecast.
         """
@@ -50,7 +50,7 @@ class ChronosModel:
 
         y_pred = []
         y_true = []
-        df = data.copy()
+        df = data.copy().reset_index()
         df["id"] = 0
         
         for start in tqdm(range(0, len(df), self.pred_length)):
@@ -62,7 +62,9 @@ class ChronosModel:
             
             context = df[["id", "DateTime"] + self.features + [self.target_col]].iloc[start:end]
             future = df[["id", "DateTime"] + self.features].iloc[end:test_end]
-            y_true.append(df[self.target_col].iloc[end:test_end])
+            true = df.set_index("DateTime")[self.target_col].iloc[end:test_end]
+            
+            y_true.append(true)
             
             pred = self.pipeline.predict_df(
                     context,
@@ -76,9 +78,14 @@ class ChronosModel:
             
             q_names = [f'pred_q{q}' for q in self.quantiles]
             pred = pred.rename(columns={str(q): q_name for q, q_name in zip(self.quantiles, q_names)})
-            y_pred.append(pred[["DateTime"] + q_names])
+            pred = pred.set_index("DateTime")[q_names]
+            y_pred.append(pred)
+        
+        y_true = pd.concat(y_true).rename("true")
+        y_pred = pd.concat(y_pred)
+        preds = y_true.to_frame().join(y_pred)
 
-        return pd.concat(y_true), pd.concat(y_pred)
+        return preds
 
 
 if __name__ == "__main__":
@@ -90,37 +97,29 @@ if __name__ == "__main__":
         config = yaml.safe_load(f)
     
     # Create an initial configuration template for Chronos if not found
-    chronos_config = config.get("ChronosModel", config["TreeModel"].copy())
-    chronos_config["model_name"] = "amazon/chronos-t5-small"
-    chronos_config["num_samples"] = 20
+    chronos_config = config["ChronosModel"]
     
     data = pd.read_csv("input/processed/data.csv", index_col=0, parse_dates=True)
     
     model = ChronosModel(chronos_config, quantiles=config["quantiles"])
     X, y = make_dataset(data, chronos_config)
-    y_true, y_pred = model.rolling_forecast(X, y)
+    preds = model.rolling_forecast(X, y)
     
     import matplotlib.pyplot as plt
     
-    x_axis = np.arange(len(y_true))
+    x_axis = preds.index
     fig, ax = plt.subplots(figsize=(12, 6), tight_layout=True)
 
-    ax.plot(x_axis, y_true, lw=2, label="True val")
-    ax.fill_between(x_axis, y_pred[:, 0], y_pred[:, -1], color="tab:purple", alpha=0.2, label="Prob. range")
-    ax.plot(x_axis, y_pred, color="tab:purple", ls="--")
+    ax.plot(x_axis, preds['true'].values, lw=2, label="True val")
+    ax.fill_between(x_axis, preds.iloc[:, 1].values, preds.iloc[:, -1], color="tab:purple", alpha=0.2, label="Prob. range")
+    ax.plot(x_axis, preds.iloc[:, 1:].values, color="tab:purple", ls="--")
     ax.set_title("Chronos Rolling Forecast")
     
     os.makedirs("figures", exist_ok=True)
     fig.savefig("figures/chronos_rolling_forecast.png")
-
-    pred_data = np.hstack([y_true, y_pred])
-    pred_cols = ['true'] + [f'pred_q{q}' for q in model.quantiles]
-    preds = pd.DataFrame(pred_data, columns=pred_cols)
     
     curr_time = datetime.now().strftime("%Y%m%d%H%M%S")
     output_dir = f"output/chronos/{curr_time}"
     os.makedirs(output_dir, exist_ok=True)
     preds.to_csv(f"{output_dir}/predictions.csv")
-    
-    config["ChronosModel"] = chronos_config
-    yaml.safe_dump(config, open(f"{output_dir}/config.yaml", "w"))
+    yaml.safe_dump(config["ChronosModel"], open(f"{output_dir}/config.yaml", "w"))

@@ -58,8 +58,8 @@ def make_dataset(data: pd.DataFrame, config:dict) -> Tuple[pd.DataFrame, pd.Seri
 
     data = data.dropna()
     
-    X = data[config["features"] + lag_cols].values
-    y = data[config["target_col"]].values
+    X = data[config["features"] + lag_cols]
+    y = data[config["target_col"]]
     
     return X, y
 

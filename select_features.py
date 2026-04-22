@@ -110,19 +110,14 @@ if __name__ == "__main__":
     print("Best err", best_err)
     print("Selected features", best_feat)
     
-    tree_config["features"] = [f for f in best_feat if not f.startwith("lag_")]
-    tree_config["lags"] = [int(f.split("_")[1]) for f in best_feat if f.startwith("lag_")]
+    # have to change the dtype to str because the features are in a np.array
+    tree_config["features"] = [str(f) for f in best_feat if not str(f).startwith("lag_")]
+    tree_config["lags"] = [int(str(f).split("_")[1]) for f in best_feat if str(f).startwith("lag_")]
     best_model = TreeModel(tree_config, quantiles=config["quantiles"])
     best_X, best_y = make_dataset(data, tree_config)
-    y_true, y_pred, feat_importances = best_model.rolling_forecast(best_X, best_y)
-    
-    pred_data = np.hstack([y_true, y_pred])
-    pred_cols = ['true'] + [f'pred_q{q}' for q in best_model.quantiles]
-    preds = pd.DataFrame(pred_data, columns=pred_cols)
+    preds, feat_importances = best_model.rolling_forecast(best_X, best_y)
     # Note: Reconstructing the exact datetime index for rolling validation is complex
     # and depends on train/pred lengths. For simplicity, we save it with a range index.
-    
     os.makedirs(f"output/tree_based/best_features", exist_ok=True)
     preds.to_csv(f"output/tree_based/best_features/predictions.csv")
-    feat_importances = pd.DataFrame(feat_importances, columns=best_feat)
     feat_importances.to_csv(f"output/tree_based/best_features/feature_importances.csv")
