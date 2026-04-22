@@ -102,6 +102,8 @@ class LinearModel:
 if __name__ == "__main__":
     import os
     import sys
+    import argparse
+    from collections.abc import Iterable
     sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     from process_data import make_dataset
 
@@ -109,6 +111,19 @@ if __name__ == "__main__":
     with open("config.yaml") as f:
         config = yaml.safe_load(f)
     
+    ### optional: change some arguments ### 
+    parser = argparse.ArgumentParser()
+    for k in config["LinearModel"]:
+        if isinstance(k, Iterable):
+            continue
+        parser.add_argument(f"--{k}", type=type(config["LinearModel"][k]), default=config["LinearModel"][k])
+        
+    args = parser.parse_args()
+    for k in config["LinearModel"]:
+        config["LinearModel"][k] = getattr(args, k)
+    
+
+
     data = pd.read_csv("input/processed/data.csv", index_col=0, parse_dates=True)
     model = LinearModel(config['LinearModel'], quantiles=config["quantiles"])
     X, y = make_dataset(data, config['LinearModel'])

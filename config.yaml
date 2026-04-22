@@ -5,7 +5,7 @@ ChronosModel:
   features: ['Coal_fM', 'Gas_fM', 'Temp_Act', 'Solar_DA', 'WindOff_DA', 'Load_DA', 'WindOn_DA']
   target_col: "Price"
   pred_length: 24 # predict day-ahead jointly
-  train_length: 4320 # 2000
+  train_length: 2000
   kwargs:
     model_name: "amazon/chronos-2" # alternatives are e.g. "amazon/chronos-t5-small"
     num_samples: 20
@@ -17,7 +17,7 @@ LinearModel:
   features: []  
   target_col: "Price"
   pred_length: 24 # predict day-ahead jointly
-  train_length: 4320
+  train_length: 2000
   kwargs:
     random_state: 42
     alpha: 20
@@ -27,10 +27,10 @@ TreeModel:
   boosting_type: 'gbdt'
   importance_type: 'gain'
   features: ['is_holiday', 'is_weekend', 'hour', 'Coal_fM', 'Gas_fM', 'Temp_Act', 'Solar_DA', 'WindOff_DA', 'Load_DA', 'WindOn_DA']
-  lags: [24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 168]
+  lags: [24, 48, 18]
   target_col: "Price"
   pred_length: 24 # predict day-ahead jointly
-  train_length: 4320
+  train_length: 2000
   kwargs:
     min_data_in_leaf: 20
     num_leaves: 31

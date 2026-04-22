@@ -92,17 +92,28 @@ if __name__ == "__main__":
     import sys
     sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     from process_data import make_dataset
+    from collections.abc import Iterable
+    import argparse
 
     with open("config.yaml") as f:
         config = yaml.safe_load(f)
     
-    # Create an initial configuration template for Chronos if not found
-    chronos_config = config["ChronosModel"]
+    ### optional: change some arguments ### 
+    parser = argparse.ArgumentParser()
+    for k in config["ChronosModel"]:
+        if isinstance(k, Iterable):
+            continue
+        parser.add_argument(f"--{k}", type=type(config["ChronosModel"][k]), default=config["ChronosModel"][k])
+        
+    args = parser.parse_args()
+    for k in config["ChronosModel"]:
+        config["ChronosModel"][k] = getattr(args, k)
+
     
     data = pd.read_csv("input/processed/data.csv", index_col=0, parse_dates=True)
     
-    model = ChronosModel(chronos_config, quantiles=config["quantiles"])
-    X, y = make_dataset(data, chronos_config)
+    model = ChronosModel(config["ChronosModel"], quantiles=config["quantiles"])
+    X, y = make_dataset(data, config["ChronosModel"])
     preds = model.rolling_forecast(pd.concat([X, y], axis=1))
     
     import matplotlib.pyplot as plt

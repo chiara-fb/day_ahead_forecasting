@@ -119,17 +119,28 @@ if __name__ == "__main__":
     import os
     import sys
     sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    import argparse
+    from collections.abc import Iterable
     from process_data import make_dataset
     # Example usage:
     with open("config.yaml") as f:
         config = yaml.safe_load(f)
+    
+    ### optional: change some arguments ### 
+    parser = argparse.ArgumentParser()
+    for k in config["TreeModel"]:
+        if isinstance(k, Iterable):
+            continue
+        parser.add_argument(f"--{k}", type=type(config["TreeModel"][k]), default=config["TreeModel"][k])
+        
+    args = parser.parse_args()
+    for k in config["TreeModel"]:
+        config["TreeModel"][k] = getattr(args, k)
 
-    tree_config = config["TreeModel"]
     data = pd.read_csv("input/processed/data.csv", index_col=0, parse_dates=True)
-    col_names = np.array(tree_config["features"] + [f"lag_{i}" for i in tree_config["lags"]])
 
-    model = TreeModel(tree_config, quantiles=config["quantiles"])
-    X, y = make_dataset(data, tree_config)
+    model = TreeModel(config["TreeModel"], quantiles=config["quantiles"])
+    X, y = make_dataset(data, config["TreeModel"])
     preds, feat_importances = model.rolling_forecast(X, y)
 
     curr_time = datetime.now().strftime("%Y%m%d%H%M%S")
