@@ -17,17 +17,20 @@ def find_best_prediction_file(output_root="output") -> dict:
     
     
     # Group by a representative model name
-    model_files = {"linear": "", "tree_based": "", "chronos": ""}
+    model_files = {}
 
-    for m in model_files:
+    for m in root.iterdir():
+        if not m.is_dir():
+            continue
+
         best_mae = np.inf
 
-        for f in list((root / m).glob("**/predictions.csv")):
+        for f in list(m.glob("**/predictions.csv")):
             df = pd.read_csv(f, index_col=0)
             mae = (df["true"] - df["pred_q0.5"]).abs().mean()
             if mae < best_mae:
                 best_mae = mae
-                model_files[m] = f
+                model_files[m.stem] = f
         
     return model_files
 
@@ -72,7 +75,7 @@ if __name__ == "__main__":
         print(f"Evaluating {model_name} from {pred_file}...")
         pred_df = pd.read_csv(pred_file, index_col=0)
         
-        all_metrics.append({'Model': model_name, **evaluate_model(pred_df)})
+        all_metrics.append({'Model': model_name, 'Best_model': pred_file.parent.name, **evaluate_model(pred_df)})
 
     if not all_metrics:
         print("Evaluation could not be completed for any model.")

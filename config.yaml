@@ -39,7 +39,7 @@ TreeModel:
   boosting_type: 'gbdt'
   importance_type: 'gain'
   features: ['is_holiday', 'is_weekend', 'hour', 'Coal_fM', 'Gas_fM', 'Temp_Act', 'Solar_DA', 'WindOff_DA', 'Load_DA', 'WindOn_DA']
-  lags: [24, 48, 18]
+  lags: [24, 48, 168]
   target_col: "Price"
   pred_length: 24 # predict day-ahead jointly
   train_length: 2000
