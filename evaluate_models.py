@@ -54,6 +54,7 @@ def evaluate_model(pred_df: pd.DataFrame) -> dict:
     pred_df_sorted = pd.concat([true_col, pred_cols[sorted_cols]], axis=1)
 
     metrics = {}
+    metrics["Mean Deviation"] = average_deviation(pred_df_sorted).mean()
     metrics['Avg Pinball Loss'] = average_pinball_loss(pred_df_sorted).mean()
     metrics['Mean Absolute Error'] = average_absolute_error(pred_df_sorted).mean()
     metrics['Coverage Within Range'] = coverage_within_range(pred_df_sorted).mean()

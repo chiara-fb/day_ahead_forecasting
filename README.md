@@ -12,6 +12,7 @@ Repository to forecast day-ahead prices with different probabilistic methods
 │
 ├── models/
 │   ├── ChronosModel.py         # Transformer-based trained on avg pinball loss
+│   └── EncDecModel.py          # Encoder-Decoder model with recursive NN
 │   └── LinearModel.py          # Quantile Regression model 
 │   └── TreeModel.py            # Gradient boosted quantile regression trees 
 ├── utils/

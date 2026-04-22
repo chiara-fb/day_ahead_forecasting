@@ -101,6 +101,14 @@ def average_absolute_error(pred_df, q=0.5) -> pd.Series:
     y_pred = pred_df[f"pred_q{q}"]
     return (y_true - y_pred).abs()
 
+def average_deviation(pred_df, q=0.5) -> pd.Series:
+    """
+    Calculates the average deviation for one quantile.
+    """
+    y_true = pred_df["true"]
+    y_pred = pred_df[f"pred_q{q}"]
+    return (y_true - y_pred)
+
 
 
 

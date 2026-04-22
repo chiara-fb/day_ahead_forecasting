@@ -28,25 +28,47 @@ class Decoder(nn.Module):
         self.fc = nn.Linear(hidden_dim, output_dim)
         
     def forward(self, x, hidden, cell):
-        # x shape: [batch, seq_len, input_dim] (future known features)
+        # x shape: [batch, 1, input_dim]
         outputs, (hidden, cell) = self.lstm(x, (hidden, cell))
-        # outputs shape: [batch, seq_len, hidden_dim]
         preds = self.fc(outputs) 
-        # preds shape: [batch, seq_len, output_dim]
-        return preds
+        return preds, hidden, cell
 
 class EncoderDecoder(nn.Module):
-    def __init__(self, enc_input_dim, dec_input_dim, hidden_dim, output_dim, num_layers=1):
+    def __init__(self, enc_input_dim, dec_input_dim, hidden_dim, output_dim, num_layers=1, median_idx=2):
         super().__init__()
         self.encoder = Encoder(enc_input_dim, hidden_dim, num_layers)
         self.decoder = Decoder(dec_input_dim, hidden_dim, output_dim, num_layers)
+        self.median_idx = median_idx
         
-    def forward(self, enc_x, dec_x):
+    def forward(self, enc_x, dec_x, target=None, teacher_forcing_ratio=0.5):
+        batch_size = enc_x.shape[0]
+        pred_length = dec_x.shape[1]
+        output_dim = self.decoder.fc.out_features
+        
+        outputs = torch.zeros(batch_size, pred_length, output_dim).to(enc_x.device)
         hidden, cell = self.encoder(enc_x)
-        preds = self.decoder(dec_x, hidden, cell)
-        return preds
+        
+        # Initial decoder input is the last target from the encoder context
+        decoder_input_y = enc_x[:, -1, -1:]
+        
+        for t in range(pred_length):
+            # Combine future features for step t with the previous target prediction
+            decoder_input_features = dec_x[:, t, :].unsqueeze(1)
+            decoder_input = torch.cat([decoder_input_features, decoder_input_y.unsqueeze(1)], dim=2)
+            
+            pred, hidden, cell = self.decoder(decoder_input, hidden, cell)
+            outputs[:, t, :] = pred.squeeze(1)
+            
+            # Decide whether to use teacher forcing for the next step
+            if target is not None and torch.rand(1).item() < teacher_forcing_ratio:
+                decoder_input_y = target[:, t].unsqueeze(1) if target.dim() == 2 else target[:, t, :]
+            else:
+                # Use the median prediction as the input for the next step
+                decoder_input_y = pred.squeeze(1)[:, self.median_idx].unsqueeze(1)
+                
+        return outputs
 
-class TorchEncoderDecoderModel:
+class EncDecModel:
     """
     A class for probabilistic forecasting using a PyTorch LSTM Encoder-Decoder architecture.
     It outputs specific quantiles by optimizing the pinball loss.
@@ -64,6 +86,7 @@ class TorchEncoderDecoderModel:
         self.lr = config.get("lr", 1e-3)
         self.epochs = config.get("epochs", 15)
         self.batch_size = config.get("batch_size", 32)
+        self.teacher_forcing_ratio = config.get("teacher_forcing_ratio", 0.5)
         
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.model = None
@@ -103,11 +126,13 @@ class TorchEncoderDecoderModel:
         y_scaled = self.scaler_y.fit_transform(y_train.values.reshape(-1, 1)).flatten()
         
         enc_input_dim = X_scaled.shape[1] + 1  # features + 1 target col
-        dec_input_dim = X_scaled.shape[1]      # only features
+        dec_input_dim = X_scaled.shape[1] + 1  # features + 1 previous target col
         output_dim = len(self.quantiles)
         
+        median_idx = self.quantiles.index(0.5) if 0.5 in self.quantiles else len(self.quantiles) // 2
+        
         self.model = EncoderDecoder(
-            enc_input_dim, dec_input_dim, self.hidden_dim, output_dim, self.num_layers
+            enc_input_dim, dec_input_dim, self.hidden_dim, output_dim, self.num_layers, median_idx=median_idx
         ).to(self.device)
         
         optimizer = optim.Adam(self.model.parameters(), lr=self.lr)
@@ -127,7 +152,7 @@ class TorchEncoderDecoderModel:
                 batch_target = batch_target.to(self.device)
                 
                 optimizer.zero_grad()
-                preds = self.model(batch_enc_x, batch_dec_x)
+                preds = self.model(batch_enc_x, batch_dec_x, target=batch_target, teacher_forcing_ratio=self.teacher_forcing_ratio)
                 loss = self.quantile_loss(preds, batch_target)
                 loss.backward()
                 optimizer.step()
@@ -145,7 +170,7 @@ class TorchEncoderDecoderModel:
             
             dec_x = torch.FloatTensor(X_test_scaled).unsqueeze(0).to(self.device)
             
-            preds = self.model(enc_x, dec_x)  # [1, pred_length, num_quantiles]
+            preds = self.model(enc_x, dec_x, target=None, teacher_forcing_ratio=0.0)  # [1, pred_length, num_quantiles]
             preds = preds[0].cpu().numpy()    # Drop batch dim: [pred_length, num_quantiles]
             
         # Inverse transform scaling predictions back to original domain
@@ -224,7 +249,7 @@ if __name__ == "__main__":
     
     data = pd.read_csv("input/processed/data.csv", index_col=0, parse_dates=True)
     
-    model = TorchEncoderDecoderModel(config["EncDecModel"], quantiles=config["quantiles"])
+    model = EncDecModel(config["EncDecModel"], quantiles=config["quantiles"])
     X, y = make_dataset(data, config["EncDecModel"])
     preds = model.rolling_forecast(X, y)
 
