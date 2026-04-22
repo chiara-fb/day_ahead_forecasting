@@ -52,13 +52,13 @@ def make_dataset(data: pd.DataFrame, config:dict) -> Tuple[pd.DataFrame, pd.Seri
     # Assuming hourly resolution, we use 24h (yesterday), 48h, and 168h (one week ago)
     lag_cols = []
     
-    for lag in config["lags"]:
+    for lag in config.get("lags",[]):
         lag_cols.append(f'lag_{lag}h')
         data[f'lag_{lag}h'] = data[config["target_col"]].shift(lag)
 
     data = data.dropna()
     
-    X = data[config["features"] + lag_cols]
+    X = data[config.get("features",[]) + lag_cols]
     y = data[config["target_col"]]
     
     return X, y
