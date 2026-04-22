@@ -103,7 +103,7 @@ if __name__ == "__main__":
     
     model = ChronosModel(chronos_config, quantiles=config["quantiles"])
     X, y = make_dataset(data, chronos_config)
-    preds = model.rolling_forecast(X, y)
+    preds = model.rolling_forecast(pd.concat([X, y], axis=1))
     
     import matplotlib.pyplot as plt
     
