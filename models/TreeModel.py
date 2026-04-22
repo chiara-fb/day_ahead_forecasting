@@ -149,8 +149,6 @@ if __name__ == "__main__":
     ax0.plot(x_axis, preds['true'].values, lw=2, label="True val")
     fig0.savefig("figures/tree_based_rolling_forecast.png")
     
-
-
     fig1, ax1 = plt.subplots(figsize=(12, 6), tight_layout=True)
     feat_importances.plot(kind="box", ax=ax1)
     ax1.set_title("Predictive feature importances")

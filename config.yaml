@@ -7,7 +7,7 @@ ChronosModel:
   pred_length: 24 # predict day-ahead jointly
   train_length: 4320 # 2000
   kwargs:
-    model_name: "amazon/chronos2" # alternatives are e.g. "amazon/chronos-t5-small"
+    model_name: "amazon/chronos-2" # alternatives are e.g. "amazon/chronos-t5-small"
     num_samples: 20
 
 

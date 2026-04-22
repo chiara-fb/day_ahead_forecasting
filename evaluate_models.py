@@ -19,24 +19,19 @@ def find_latest_prediction_files(output_root="output"):
     pred_files = list(root.glob("**/predictions.csv"))
     
     # Group by a representative model name
-    model_files = {}
+    model_files = {"linear": [], "tree_based": [], "chronos": []}
+
     for f in pred_files:
-        # e.g., parts = ('output', 'tree_based', '2026...', 'predictions.csv')
-        # or ('output', 'tree_based', 'best_features', 'predictions.csv')
+        # this could "linear", "tree_based", "chronos"
         model_name = f.parts[1]
-        if 'best_features' in f.parts:
-            model_name = f"{model_name}_best"
-        
-        if model_name not in model_files:
-            model_files[model_name] = []
         model_files[model_name].append(f)
         
     # Find the latest file for each model group
     latest_files = {}
     for model_name, files in model_files.items():
+        # get the file which was updated most recently
         latest_file = max(files, key=lambda p: p.stat().st_mtime)
         latest_files[model_name] = latest_file
-        
     return latest_files
 
 def evaluate_model(pred_df: pd.DataFrame) -> dict:
@@ -65,14 +60,13 @@ def evaluate_model(pred_df: pd.DataFrame) -> dict:
     return metrics
 
 
-def main():
-    """Main function to run the evaluation."""
+if __name__ == "__main__":
+
     output_root = "output"
     latest_files = find_latest_prediction_files(output_root)
     
     if not latest_files:
         print("No prediction files found in 'output' directory. Run models to generate predictions first.")
-        return
 
     all_metrics = []
 
@@ -84,17 +78,10 @@ def main():
 
     if not all_metrics:
         print("Evaluation could not be completed for any model.")
-        return
         
     summary_df = pd.DataFrame(all_metrics).set_index('Model')
-    print("\n--- Model Evaluation Summary ---")
-    print(summary_df.round(4))
-    
-    os.makedirs(output_root, exist_ok=True)
-    summary_df.to_csv(f"{output_root}/evaluation_summary.csv")
+    summary_df.to_csv(f"evaluation_summary.csv")
     print(f"\nSummary saved to {output_root}/evaluation_summary.csv")
 
     os.makedirs("figures", exist_ok=True)
 
-if __name__ == "__main__":
-    main()
