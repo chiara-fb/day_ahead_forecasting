@@ -7,32 +7,29 @@ import sys
 
 # Add project root to path to import utils
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-from utils.losses import average_pinball_loss, coverage_within_range
+from utils.losses import *
 
-def find_latest_prediction_files(output_root="output"):
+def find_best_prediction_file(output_root="output") -> dict:
     """Finds the latest prediction file for each model type."""
     root = Path(output_root)
     if not root.exists():
         return {}
     
-    # Find all prediction files
-    pred_files = list(root.glob("**/predictions.csv"))
     
     # Group by a representative model name
-    model_files = {"linear": [], "tree_based": [], "chronos": []}
+    model_files = {"linear": "", "tree_based": "", "chronos": ""}
 
-    for f in pred_files:
-        # this could "linear", "tree_based", "chronos"
-        model_name = f.parts[1]
-        model_files[model_name].append(f)
+    for m in model_files:
+        best_mae = np.inf
+
+        for f in list((root / m).glob("**/predictions.csv")):
+            df = pd.read_csv(f, index_col=0)
+            mae = (df["true"] - df["pred_q0.5"]).abs().mean()
+            if mae < best_mae:
+                best_mae = mae
+                model_files[m] = f
         
-    # Find the latest file for each model group
-    latest_files = {}
-    for model_name, files in model_files.items():
-        # get the file which was updated most recently
-        latest_file = max(files, key=lambda p: p.stat().st_mtime)
-        latest_files[model_name] = latest_file
-    return latest_files
+    return model_files
 
 def evaluate_model(pred_df: pd.DataFrame) -> dict:
     """Calculates all evaluation metrics for a given prediction DataFrame."""
@@ -55,6 +52,7 @@ def evaluate_model(pred_df: pd.DataFrame) -> dict:
 
     metrics = {}
     metrics['Avg Pinball Loss'] = average_pinball_loss(pred_df_sorted).mean()
+    metrics['Mean Absolute Error'] = average_absolute_error(pred_df_sorted).mean()
     metrics['Coverage Within Range'] = coverage_within_range(pred_df_sorted).mean()
     
     return metrics
@@ -63,7 +61,7 @@ def evaluate_model(pred_df: pd.DataFrame) -> dict:
 if __name__ == "__main__":
 
     output_root = "output"
-    latest_files = find_latest_prediction_files(output_root)
+    latest_files = find_best_prediction_file(output_root)
     
     if not latest_files:
         print("No prediction files found in 'output' directory. Run models to generate predictions first.")
@@ -81,7 +79,4 @@ if __name__ == "__main__":
         
     summary_df = pd.DataFrame(all_metrics).set_index('Model')
     summary_df.to_csv(f"evaluation_summary.csv")
-    print(f"\nSummary saved to {output_root}/evaluation_summary.csv")
-
-    os.makedirs("figures", exist_ok=True)
 

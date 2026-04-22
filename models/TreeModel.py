@@ -128,14 +128,21 @@ if __name__ == "__main__":
     
     ### optional: change some arguments ### 
     parser = argparse.ArgumentParser()
-    for k in config["TreeModel"]:
-        if isinstance(k, Iterable):
+    for k0 in config["TreeModel"]:
+        if k0 == "kwargs":
+            for k1 in config["TreeModel"][k0]:
+                parser.add_argument(f"--{k0}_{k1}", type=type(config["TreeModel"][k0][k1]), default=config["TreeModel"][k0][k1])
             continue
-        parser.add_argument(f"--{k}", type=type(config["TreeModel"][k]), default=config["TreeModel"][k])
+        # add argument as non-iterable or list
+        parser.add_argument(f"--{k0}", type=type(config["TreeModel"][k0]), default=config["TreeModel"][k0])
         
     args = parser.parse_args()
-    for k in config["TreeModel"]:
-        config["TreeModel"][k] = getattr(args, k)
+    for arg0, value in vars(args).items(): 
+        if arg0.startswith("kwargs"):
+            arg1 = "_".join(arg0.split("_")[1:])
+            config["TreeModel"]["kwargs"][arg1] = getattr(args, arg0)
+        else:
+            config["TreeModel"][arg0] = getattr(args, arg0)
 
     data = pd.read_csv("input/processed/data.csv", index_col=0, parse_dates=True)
 

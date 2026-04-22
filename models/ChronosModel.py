@@ -100,14 +100,21 @@ if __name__ == "__main__":
     
     ### optional: change some arguments ### 
     parser = argparse.ArgumentParser()
-    for k in config["ChronosModel"]:
-        if isinstance(k, Iterable):
+    for k0 in config["ChronosModel"]:
+        if k0 == "kwargs":
+            for k1 in config["ChronosModel"][k0]:
+                parser.add_argument(f"--{k0}_{k1}", type=type(config["ChronosModel"][k0][k1]), default=config["ChronosModel"][k0][k1])
             continue
-        parser.add_argument(f"--{k}", type=type(config["ChronosModel"][k]), default=config["ChronosModel"][k])
+        # add argument as non-iterable or list
+        parser.add_argument(f"--{k0}", type=type(config["ChronosModel"][k0]), default=config["ChronosModel"][k0])
         
     args = parser.parse_args()
-    for k in config["ChronosModel"]:
-        config["ChronosModel"][k] = getattr(args, k)
+    for arg0, value in vars(args).items(): 
+        if arg0.startswith("kwargs"):
+            arg1 = "_".join(arg0.split("_")[1:])
+            config["ChronosModel"]["kwargs"][arg1] = getattr(args, arg0)
+        else:
+            config["ChronosModel"][arg0] = getattr(args, arg0)
 
     
     data = pd.read_csv("input/processed/data.csv", index_col=0, parse_dates=True)

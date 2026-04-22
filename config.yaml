@@ -2,7 +2,7 @@ quantiles: [0.1, 0.25, 0.5, 0.75, 0.9]
 
 
 ChronosModel:
-  features: ['Coal_fM', 'Gas_fM', 'Temp_Act', 'Solar_DA', 'WindOff_DA', 'Load_DA', 'WindOn_DA']
+  features: ['Coal_fM', 'Gas_fM', 'Temp_Act', 'Solar_DA', 'WindOff_DA', 'Load_DA', 'WindOn_DA', 'is_holiday', 'is_weekend']
   target_col: "Price"
   pred_length: 24 # predict day-ahead jointly
   train_length: 2000
@@ -10,7 +10,19 @@ ChronosModel:
     model_name: "amazon/chronos-2" # alternatives are e.g. "amazon/chronos-t5-small"
     num_samples: 20
 
-
+EncDecModel:
+    # Create fallback defaults in case TorchModel config hasn't been added yet
+    features: ['Coal_fM', 'Gas_fM', 'Temp_Act', 'Solar_DA', 'WindOff_DA', 'Load_DA', 'WindOn_DA', 'hour_sin', 'hour_cos', 'is_holiday', 'is_weekend', 'month_sin', 'month_cos']
+    target_col: "Price"
+    pred_length: 24 # predict day-ahead jointly
+    train_length: 4320
+    test_length: 720
+    context_length: 168
+    kwargs: 
+      epochs: 10
+      batch_size: 32
+      lr: 0.005
+      hidden_dim: 64
 
 LinearModel:
   lags: [24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47]
