@@ -113,45 +113,45 @@ if __name__ == "__main__":
     
     ### optional: change some arguments ### 
     parser = argparse.ArgumentParser()
-    for k0 in config["EncDecModel"]:
+    for k0 in config["LinearModel"]:
         if k0 == "kwargs":
-            for k1 in config["EncDecModel"][k0]:
-                parser.add_argument(f"--{k0}_{k1}", type=type(config["EncDecModel"][k0][k1]), default=config["EncDecModel"][k0][k1])
+            for k1 in config["LinearModel"][k0]:
+                parser.add_argument(f"--{k0}_{k1}", type=type(config["LinearModel"][k0][k1]), default=config["LinearModel"][k0][k1])
             continue
         # add argument as non-iterable or list
-        parser.add_argument(f"--{k0}", type=type(config["EncDecModel"][k0]), default=config["EncDecModel"][k0])
+        parser.add_argument(f"--{k0}", type=type(config["LinearModel"][k0]), default=config["LinearModel"][k0])
         
     args = parser.parse_args()
     for arg0, value in vars(args).items(): 
         if arg0.startswith("kwargs"):
             arg1 = "_".join(arg0.split("_")[1:])
-            config["EncDecModel"]["kwargs"][arg1] = getattr(args, arg0)
+            config["LinearModel"]["kwargs"][arg1] = getattr(args, arg0)
         else:
-            config["EncDecModel"][arg0] = getattr(args, arg0)
+            config["LinearModel"][arg0] = getattr(args, arg0)
     
 
 
     data = pd.read_csv("input/processed/data.csv", index_col=0, parse_dates=True)
     model = LinearModel(config['LinearModel'], quantiles=config["quantiles"])
     X, y = make_dataset(data, config['LinearModel'])
-    y_true, y_pred = model.rolling_forecast(X, y)
-    import matplotlib.pyplot as plt
-    
-    x_axis = np.arange(len(y_true))
-    fig, ax = plt.subplots(figsize=(12, 6), tight_layout=True)
+    preds = model.rolling_forecast(X, y)
 
-    ax.plot(x_axis, y_true, lw=2, label="True val")
-    ax.fill_between(x_axis, y_pred[:, 0], y_pred[:, -1], color="tab:blue", alpha=0.2, label="Prob. range")
-    ax.plot(x_axis, y_pred, color="tab:blue", ls="--")
-    fig.savefig("figures/linear_rolling_forecast.png")
-
-    pred_data = np.hstack([y_true, y_pred])
-    pred_cols = ['true'] + [f'pred_q{q}' for q in model.quantiles]
-    preds = pd.DataFrame(pred_data, columns=pred_cols)
-    # Note: Reconstructing the exact datetime index for rolling validation is complex
     # and depends on train/pred lengths. For simplicity, we save it with a range index.
     curr_time = datetime.now().strftime("%Y%m%d%H%M%S")
     output_dir = f"output/linear/{curr_time}"
     os.makedirs(output_dir, exist_ok=True)
     preds.to_csv(f"{output_dir}/predictions.csv")
     yaml.safe_dump(config["LinearModel"], open(f"{output_dir}/config.yaml", "w"))
+
+
+    import matplotlib.pyplot as plt
+    
+    x_axis = np.arange(len(preds))
+    fig, ax = plt.subplots(figsize=(12, 6), tight_layout=True)
+
+    ax.plot(x_axis, preds["true"], lw=2, label="True val")
+    ax.fill_between(x_axis, preds["pred_q0.1"], preds["pred_q0.9"], color="tab:blue", alpha=0.2, label="Prob. range")
+    ax.plot(x_axis, preds, color="tab:blue", ls="--")
+    fig.savefig("figures/linear_rolling_forecast.png")
+
+    # Note: Reconstructing the exact datetime index for rolling validation is complex
